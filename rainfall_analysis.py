@@ -96,7 +96,20 @@ def generate_analysis(df):
 # st.markdown("**Note:** Monsoon is considered from June to September.")
 
 # The rest of the script remains unchanged.
+# In the Streamlit section
+# Add date range filter
+st.sidebar.markdown("### Filter by Date")
+start_date = st.sidebar.date_input("Start Date")
+end_date = st.sidebar.date_input("End Date")
 
+if start_date and end_date:
+    filtered_df = st.session_state["original_df"][(st.session_state["original_df"]["Date"] >= pd.to_datetime(start_date)) &
+                                                  (st.session_state["original_df"]["Date"] <= pd.to_datetime(end_date))]
+    final_output, monthly_avg, max_rainfall, dekad_avg, monsoon_summary, dekad_rainfall = generate_analysis(filtered_df)
+
+    st.subheader("\U0001F327\uFE0F Monsoon Rainfall Summary (June–September)")
+    st.markdown("**Note:** Monsoon is considered from June to September.")
+    st.dataframe(monsoon_summary)
 
 def create_plot(x, y, xlabel, ylabel, title):
     fig, ax = plt.subplots(figsize=(8,4))
