@@ -6,7 +6,7 @@ from datetime import datetime
 from openpyxl import load_workbook
 from openpyxl.drawing.image import Image as XLImage
 import tempfile
-import openai
+from openai import OpenAI
 
 # Constants
 MONTH_ORDER = ['January', 'February', 'March', 'April', 'May', 'June',
@@ -20,7 +20,7 @@ WATER_YEAR_MONTH_ORDER = [
 DEKAD_MONTH_INDEX = {month: i for i, month in enumerate(WATER_YEAR_MONTH_ORDER)}
 DEKAD_INDEX = {d: i for i, d in enumerate(DEKAD_ORDER)}
 
-openai.api_key = st.secrets["OPENAI_API_KEY"]
+client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
 
 def assign_water_year(df):
     df['Month'] = df['Date'].dt.month
@@ -137,13 +137,13 @@ def generate_ai_insights(annual_df, monthly_df, max_df):
     Highlight anomalies, trends, and any insights useful for water resource planning.
     """
 
-    response = openai.ChatCompletion.create(
+    response = client.chat.completions.create(
         model="gpt-3.5-turbo",
-        messages=[{"role": "user", "content": prompt}],
-        max_tokens=500
+        messages=[{"role": "system", "content": "You are a hydrologist and climate analyst."},
+                  {"role": "user", "content": prompt}]
     )
 
-    return response['choices'][0]['message']['content']
+    return response.choices[0].message.content
 
 # Streamlit App
 st.set_page_config(layout='wide')
@@ -193,10 +193,14 @@ if uploaded_file:
     st.subheader("🤖 AI-Assisted Rainfall Insights")
     if st.button("Generate AI Insights"):
         with st.spinner("Generating insights using ChatGPT..."):
-            insights = generate_ai_insights(annual_df, monthly_df, max_df)
-        st.markdown(insights)
+            try:
+                insights = generate_ai_insights(annual_df, monthly_df, max_df)
+                st.success("AI insights generated successfully.")
+                st.markdown(insights)
+            except Exception as e:
+                st.error("Failed to generate insights.")
+                st.exception(e)
 
     st.subheader("⬇️ Download Full Excel Report with Charts")
     excel_bytes, excel_filename = export_to_excel(annual_df, monthly_df, max_df, dekad_df)
     st.download_button("Download Report", data=excel_bytes, file_name="Rainfall_Report.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
-
