@@ -81,7 +81,7 @@ def generate_analysis(df):
     dekad_avg = dekad_rainfall.groupby('Period')['Ten_Daily_Rainfall_mm'].mean().reset_index()
     dekad_avg.rename(columns={'Ten_Daily_Rainfall_mm': 'Avg_Ten_Daily_Rainfall_mm'}, inplace=True)
 
-    return final_output, monthly_avg, max_rainfall, dekad_avg, calculate_monsoon_rainfall(df)
+    return final_output, monthly_avg, max_rainfall, dekad_avg, calculate_monsoon_rainfall(df), dekad_rainfall
 
 def create_plot(x, y, xlabel, ylabel, title):
     fig, ax = plt.subplots(figsize=(8,4))
@@ -172,7 +172,7 @@ if uploaded_file:
 
     st.success("File processed successfully.")
 
-    annual_df, monthly_df, max_df, dekad_df, monsoon_df = generate_analysis(df)
+    annual_df, monthly_df, max_df, dekad_df, monsoon_df, dekad_full = generate_analysis(df)
 
     st.subheader("📈 Annual Rainfall Table")
     st.dataframe(annual_df)
@@ -183,8 +183,11 @@ if uploaded_file:
     st.subheader("🌧️ Maximum Daily Rainfall Table")
     st.dataframe(max_df)
 
-    st.subheader("📅 10-Daily Rainfall Averages")
+    st.subheader("📅 10-Daily Rainfall Averages (Average across Years)")
     st.dataframe(dekad_df)
+
+    st.subheader("📅 10-Daily Rainfall Values (All Years)")
+    st.dataframe(dekad_full)
 
     st.subheader("🌦️ Monsoon Rainfall Summary (June–September)")
     st.dataframe(monsoon_df)
