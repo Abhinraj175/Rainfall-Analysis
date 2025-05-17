@@ -11,11 +11,28 @@ import tempfile
 MONTH_ORDER = ['January', 'February', 'March', 'April', 'May', 'June',
                'July', 'August', 'September', 'October', 'November', 'December']
 
+DEKAD_ORDER = ['I', 'II', 'III']
+WATER_YEAR_MONTH_ORDER = [
+    'June', 'July', 'August', 'September', 'October', 'November', 'December',
+    'January', 'February', 'March', 'April', 'May']
+
+DEKAD_MONTH_INDEX = {month: i for i, month in enumerate(WATER_YEAR_MONTH_ORDER)}
+DEKAD_INDEX = {d: i for i, d in enumerate(DEKAD_ORDER)}
+
+
 def assign_water_year(df):
     df['Month'] = df['Date'].dt.month
     df['Year'] = df['Date'].dt.year
     df['Water_Year'] = df['Date'].apply(lambda x: f"{x.year}-{x.year+1}" if x.month >= 6 else f"{x.year-1}-{x.year}")
     return df
+
+def assign_dekad(day):
+    if day <= 10:
+        return "I"
+    elif day <= 20:
+        return "II"
+    else:
+        return "III"
 
 def generate_analysis(df):
     df['Month_Name'] = df['Date'].dt.month_name()
@@ -43,7 +60,20 @@ def generate_analysis(df):
         'Date': 'Date_of_Occurrence'
     }, inplace=True)
 
-    return final_output, monthly_avg, max_rainfall
+    # 10-Daily Rainfall
+    df['Day'] = df['Date'].dt.day
+    df['Dekad'] = df['Day'].apply(assign_dekad)
+    dekad_rainfall = df.groupby(['Water_Year', 'Month_Name', 'Dekad'])['Rainfall_mm'].sum().reset_index()
+    dekad_rainfall.rename(columns={'Rainfall_mm': 'Ten_Daily_Rainfall_mm'}, inplace=True)
+    dekad_rainfall['Month_Num'] = dekad_rainfall['Month_Name'].map(DEKAD_MONTH_INDEX)
+    dekad_rainfall['Dekad_Num'] = dekad_rainfall['Dekad'].map(DEKAD_INDEX)
+    dekad_rainfall = dekad_rainfall.sort_values(by=['Water_Year', 'Month_Num', 'Dekad_Num']).drop(columns=['Month_Num', 'Dekad_Num'])
+
+    dekad_rainfall['Period'] = dekad_rainfall['Month_Name'] + ' ' + dekad_rainfall['Dekad']
+    dekad_avg = dekad_rainfall.groupby('Period')['Ten_Daily_Rainfall_mm'].mean().reset_index()
+    dekad_avg.rename(columns={'Ten_Daily_Rainfall_mm': 'Avg_Ten_Daily_Rainfall_mm'}, inplace=True)
+
+    return final_output, monthly_avg, max_rainfall, dekad_avg
 
 def create_plot(x, y, xlabel, ylabel, title):
     fig, ax = plt.subplots(figsize=(8,4))
@@ -56,20 +86,21 @@ def create_plot(x, y, xlabel, ylabel, title):
     plt.tight_layout()
     return fig
 
-def export_to_excel(annual_df, monthly_df, max_df):
+def export_to_excel(annual_df, monthly_df, max_df, dekad_df):
     with tempfile.NamedTemporaryFile(delete=False, suffix=".xlsx") as tmp:
         with pd.ExcelWriter(tmp.name, engine='openpyxl') as writer:
             annual_df.to_excel(writer, sheet_name='Annual Rainfall', index=False)
             monthly_df.to_excel(writer, sheet_name='Monthly Averages', index=False)
             max_df.to_excel(writer, sheet_name='Max Daily Rainfall', index=False)
+            dekad_df.to_excel(writer, sheet_name='10-Daily Averages', index=False)
 
-        # Insert plots
         wb = load_workbook(tmp.name)
 
         plots = [
             ('Annual Rainfall', create_plot(annual_df['Water_Year'], annual_df['Annual_Rainfall_mm'], 'Water Year', 'Annual Rainfall (mm)', 'Annual Rainfall Variations by Water Year')),
             ('Monthly Averages', create_plot(monthly_df['Month_Name'], monthly_df['Average_Monthly_Rainfall_mm'], 'Month', 'Average Monthly Rainfall (mm)', 'Average Monthly Rainfall')),
             ('Max Daily Rainfall', create_plot(max_df['Water_Year'], max_df['Max_Daily_Rainfall_mm'], 'Water Year', 'Max Daily Rainfall (mm)', 'Maximum Daily Rainfall by Water Year')),
+            ('10-Daily Averages', create_plot(dekad_df['Period'], dekad_df['Avg_Ten_Daily_Rainfall_mm'], 'Dekadal Period', 'Average Rainfall (mm)', 'Average Ten-Daily Rainfall')),
         ]
 
         for sheet, fig in plots:
@@ -99,7 +130,7 @@ if uploaded_file:
 
     st.success("File processed successfully.")
 
-    annual_df, monthly_df, max_df = generate_analysis(df)
+    annual_df, monthly_df, max_df, dekad_df = generate_analysis(df)
 
     st.subheader("📈 Annual Rainfall Table")
     st.dataframe(annual_df)
@@ -110,6 +141,9 @@ if uploaded_file:
     st.subheader("🌧️ Maximum Daily Rainfall Table")
     st.dataframe(max_df)
 
+    st.subheader("📅 10-Daily Rainfall Averages")
+    st.dataframe(dekad_df)
+
     st.subheader("📊 Annual Rainfall Plot")
     st.pyplot(create_plot(annual_df['Water_Year'], annual_df['Annual_Rainfall_mm'], 'Water Year', 'Annual Rainfall (mm)', 'Annual Rainfall Variations by Water Year'))
 
@@ -119,6 +153,9 @@ if uploaded_file:
     st.subheader("📊 Max Daily Rainfall Plot")
     st.pyplot(create_plot(max_df['Water_Year'], max_df['Max_Daily_Rainfall_mm'], 'Water Year', 'Max Daily Rainfall (mm)', 'Maximum Daily Rainfall by Water Year'))
 
+    st.subheader("📊 10-Daily Rainfall Plot")
+    st.pyplot(create_plot(dekad_df['Period'], dekad_df['Avg_Ten_Daily_Rainfall_mm'], 'Dekadal Period', 'Average Rainfall (mm)', 'Average Ten-Daily Rainfall'))
+
     st.subheader("⬇️ Download Full Excel Report with Charts")
-    excel_bytes, excel_filename = export_to_excel(annual_df, monthly_df, max_df)
+    excel_bytes, excel_filename = export_to_excel(annual_df, monthly_df, max_df, dekad_df)
     st.download_button("Download Report", data=excel_bytes, file_name="Rainfall_Report.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
