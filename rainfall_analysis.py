@@ -6,7 +6,7 @@ from datetime import datetime
 from openpyxl import load_workbook
 from openpyxl.drawing.image import Image as XLImage
 import tempfile
-from openai import OpenAI
+import openai
 
 # Constants
 MONTH_ORDER = ['January', 'February', 'March', 'April', 'May', 'June',
@@ -20,7 +20,7 @@ WATER_YEAR_MONTH_ORDER = [
 DEKAD_MONTH_INDEX = {month: i for i, month in enumerate(WATER_YEAR_MONTH_ORDER)}
 DEKAD_INDEX = {d: i for i, d in enumerate(DEKAD_ORDER)}
 
-client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
+openai.api_key = st.secrets["OPENAI_API_KEY"]
 
 def assign_water_year(df):
     df['Month'] = df['Date'].dt.month
@@ -38,9 +38,16 @@ def assign_dekad(day):
 
 def calculate_monsoon_rainfall(df):
     monsoon_df = df[df['Date'].dt.month.isin([6, 7, 8, 9])]
+    non_monsoon_df = df[~df['Date'].dt.month.isin([6, 7, 8, 9])]
+
     monsoon = monsoon_df.groupby('Water_Year')['Rainfall_mm'].sum().reset_index()
     monsoon.rename(columns={'Rainfall_mm': 'Monsoon_Rainfall_mm'}, inplace=True)
-    return monsoon
+
+    non_monsoon = non_monsoon_df.groupby('Water_Year')['Rainfall_mm'].sum().reset_index()
+    non_monsoon.rename(columns={'Rainfall_mm': 'Non_Monsoon_Rainfall_mm'}, inplace=True)
+
+    merged = pd.merge(monsoon, non_monsoon, on='Water_Year', how='outer').fillna(0)
+    return merged
 
 def generate_analysis(df):
     df['Month_Name'] = df['Date'].dt.month_name()
@@ -82,6 +89,14 @@ def generate_analysis(df):
     dekad_avg.rename(columns={'Ten_Daily_Rainfall_mm': 'Avg_Ten_Daily_Rainfall_mm'}, inplace=True)
 
     return final_output, monthly_avg, max_rainfall, dekad_avg, calculate_monsoon_rainfall(df), dekad_rainfall
+
+# In the Streamlit section
+# After st.subheader("🌦️ Monsoon Rainfall Summary (June–September)")
+# Add a note
+# st.markdown("**Note:** Monsoon is considered from June to September.")
+
+# The rest of the script remains unchanged.
+
 
 def create_plot(x, y, xlabel, ylabel, title):
     fig, ax = plt.subplots(figsize=(8,4))
