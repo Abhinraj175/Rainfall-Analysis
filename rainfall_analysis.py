@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 import io
 from datetime import datetime
 from openpyxl import load_workbook
-from openpyxl.drawing.image import Image as XLImage
+from openpyxl.drawing.image import Image
 import tempfile
 import openai
 
@@ -91,12 +91,6 @@ def generate_analysis(df):
     return final_output, monthly_avg, max_rainfall, dekad_avg, calculate_monsoon_rainfall(df), dekad_rainfall
 
 # In the Streamlit section
-# After st.subheader("🌦️ Monsoon Rainfall Summary (June–September)")
-# Add a note
-# st.markdown("**Note:** Monsoon is considered from June to September.")
-
-# The rest of the script remains unchanged.
-# In the Streamlit section
 # Add date range filter
 st.sidebar.markdown("### Filter by Date")
 start_date = st.sidebar.date_input("Start Date")
@@ -110,6 +104,7 @@ if start_date and end_date:
     st.subheader("\U0001F327\uFE0F Monsoon Rainfall Summary (June–September)")
     st.markdown("**Note:** Monsoon is considered from June to September.")
     st.dataframe(monsoon_summary)
+
 
 def create_plot(x, y, xlabel, ylabel, title):
     fig, ax = plt.subplots(figsize=(8,4))
