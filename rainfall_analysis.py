@@ -4,19 +4,17 @@ import matplotlib.pyplot as plt
 import io
 from datetime import datetime
 from openpyxl import load_workbook
-from openpyxl.drawing.image import Image
+from openpyxl.drawing.image import Image as XLImage
 import tempfile
 import openai
 
 # Constants
 MONTH_ORDER = ['January', 'February', 'March', 'April', 'May', 'June',
                'July', 'August', 'September', 'October', 'November', 'December']
-
 DEKAD_ORDER = ['I', 'II', 'III']
 WATER_YEAR_MONTH_ORDER = [
     'June', 'July', 'August', 'September', 'October', 'November', 'December',
     'January', 'February', 'March', 'April', 'May']
-
 DEKAD_MONTH_INDEX = {month: i for i, month in enumerate(WATER_YEAR_MONTH_ORDER)}
 DEKAD_INDEX = {d: i for i, d in enumerate(DEKAD_ORDER)}
 
@@ -39,20 +37,15 @@ def assign_dekad(day):
 def calculate_monsoon_rainfall(df):
     monsoon_df = df[df['Date'].dt.month.isin([6, 7, 8, 9])]
     non_monsoon_df = df[~df['Date'].dt.month.isin([6, 7, 8, 9])]
-
     monsoon = monsoon_df.groupby('Water_Year')['Rainfall_mm'].sum().reset_index()
     monsoon.rename(columns={'Rainfall_mm': 'Monsoon_Rainfall_mm'}, inplace=True)
-
     non_monsoon = non_monsoon_df.groupby('Water_Year')['Rainfall_mm'].sum().reset_index()
     non_monsoon.rename(columns={'Rainfall_mm': 'Non_Monsoon_Rainfall_mm'}, inplace=True)
-
     merged = pd.merge(monsoon, non_monsoon, on='Water_Year', how='outer').fillna(0)
     return merged
 
 def generate_analysis(df):
     df['Month_Name'] = df['Date'].dt.month_name()
-
-    # Annual Rainfall
     annual_rainfall = df.groupby('Water_Year')['Rainfall_mm'].sum().reset_index()
     annual_rainfall.rename(columns={'Rainfall_mm': 'Annual_Rainfall_mm'}, inplace=True)
     average_rainfall = annual_rainfall['Annual_Rainfall_mm'].mean()
@@ -61,21 +54,15 @@ def generate_analysis(df):
         'Annual_Rainfall_mm': average_rainfall
     }])], ignore_index=True)
 
-    # Monthly Average
     monthly_totals = df.groupby(['Water_Year', 'Month_Name'])['Rainfall_mm'].sum().reset_index()
     monthly_avg = monthly_totals.groupby('Month_Name')['Rainfall_mm'].mean().reset_index()
     monthly_avg.rename(columns={'Rainfall_mm': 'Average_Monthly_Rainfall_mm'}, inplace=True)
     monthly_avg['Month_Num'] = monthly_avg['Month_Name'].apply(lambda x: MONTH_ORDER.index(x))
     monthly_avg = monthly_avg.sort_values('Month_Num').drop(columns='Month_Num')
 
-    # Max Daily Rainfall
     max_rainfall = df.loc[df.groupby('Water_Year')['Rainfall_mm'].idxmax()][['Water_Year', 'Rainfall_mm', 'Date']]
-    max_rainfall.rename(columns={
-        'Rainfall_mm': 'Max_Daily_Rainfall_mm',
-        'Date': 'Date_of_Occurrence'
-    }, inplace=True)
+    max_rainfall.rename(columns={'Rainfall_mm': 'Max_Daily_Rainfall_mm', 'Date': 'Date_of_Occurrence'}, inplace=True)
 
-    # 10-Daily Rainfall
     df['Day'] = df['Date'].dt.day
     df['Dekad'] = df['Day'].apply(assign_dekad)
     dekad_rainfall = df.groupby(['Water_Year', 'Month_Name', 'Dekad'])['Rainfall_mm'].sum().reset_index()
@@ -128,7 +115,6 @@ def export_to_excel(annual_df, monthly_df, max_df, dekad_df, monsoon_df):
             wb[sheet].add_image(img)
 
         wb.save(tmp.name)
-
         tmp.seek(0)
         return tmp.read(), tmp.name
 
@@ -136,7 +122,6 @@ def generate_ai_insights(annual_df, monthly_df, max_df):
     annual_summary = annual_df.to_csv(index=False)
     monthly_summary = monthly_df.to_csv(index=False)
     max_rainfall_summary = max_df.to_csv(index=False)
-
     prompt = f"""
     Provide a concise analysis of rainfall trends based on the following datasets:
 
@@ -151,26 +136,23 @@ def generate_ai_insights(annual_df, monthly_df, max_df):
 
     Highlight anomalies, trends, and any insights useful for water resource planning.
     """
-
-    response = client.chat.completions.create(
+    response = openai.ChatCompletion.create(
         model="gpt-3.5-turbo",
         messages=[{"role": "system", "content": "You are a hydrologist and climate analyst."},
                   {"role": "user", "content": prompt}]
     )
-
     return response.choices[0].message.content
 
-# Streamlit App
+# Streamlit UI
 st.set_page_config(layout='wide')
 st.title("Rainfall Data Analysis (Water Year based)")
-
 uploaded_file = st.file_uploader("Upload CSV File", type=["csv"])
 
 if uploaded_file:
     df = pd.read_csv(uploaded_file)
     df.columns = df.columns.str.strip()
     if 'Date' not in df.columns or 'Rainfall_mm' not in df.columns:
-        st.error(f"CSV is missing required columns. Found columns: {list(df.columns)}. Required: ['Date', 'Rainfall_mm']")
+        st.error("CSV must contain 'Date' and 'Rainfall_mm' columns.")
         st.stop()
 
     df['Date'] = pd.to_datetime(df['Date'], format='%d/%m/%y', errors='coerce')
@@ -197,6 +179,7 @@ if uploaded_file:
     st.dataframe(dekad_full)
 
     st.subheader("🌦️ Monsoon Rainfall Summary (June–September)")
+    st.markdown("*Note: Monsoon is considered from June to September.*")
     st.dataframe(monsoon_df)
 
     st.subheader("📊 Annual Rainfall Plot")
